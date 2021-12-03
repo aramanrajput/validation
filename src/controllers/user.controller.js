@@ -1,5 +1,7 @@
 const express = require("express")
-const transporter = require("../configs/mail")
+
+const{body,validationResult}=require("express-validator")
+
 const router = express.Router()
 const app = express()
 
@@ -7,43 +9,46 @@ const app = express()
 const User = require("../models/user.model")
 
 
-const to_array = [
-    "b@b.com",
-    "c@c.com",
-    "d@d.com",
-    "e@e.com",
-    "f@f.com",
-]
-
-const to_string = to_array.join(",")
 
 app.use(express.json())
 
 
-router.post("/", async (req,res)=>{
+router.post("/",body("first_name").notEmpty().withMessage("first name is required"),
+body("last_name").notEmpty().withMessage("last name is required"),
+body("email").notEmpty().custom((value)=>{
+    const isEmail =
+        /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/.test(value)
+
+        if(!isEmail||value <=0){
+            throw Error("Please enter proper email adress")
+        }
+      return true
+}),
+body("pincode").isLength({min:6,max:6}).withMessage("pincode should be exactly 6 numbers"),
+body("age").notEmpty().custom((value)=>{
+    if(!(value>=1&&value<=100)){
+        throw Error("age should be number between 1-100")
+    }
+    return true
+}),
+body("gender").notEmpty().custom((value)=>{
+    if(!(value=="Male"||value=="Female"||value=="Others")){
+        throw Error("gender should be Male,Female or Others")
+    }
+    return true
+})
+ ,async (req,res)=>{
+const errors = validationResult(req)
+if(!errors.isEmpty()){
+    let newErrors = errors.array().map(err=>err.msg)
+    return res.status(400).json({errors:newErrors})
+}
+
     try{
        
         const user = await User.create(req.body)
 
-       
-        var message = {
-            from: "a@a.com",
-            to: req.body.email,
-            subject: `welcome to ABC system ${user.first_name} ${user.last_name}`,
-            text:  `hi ${user.first_name} please confirm you email adress`,
-            html: `<h1>hi ${user.first_name} please confirm you email adress</h1>`
-          };
-
-          transporter.sendMail(message)
-        var message2 = {
-            from:"a@a.com",
-            to:to_string,
-            subject:`${user.first_name} ${user.last_name} registered with us`,
-            text:`Please welcome ${user.first_name} ${user.last_name}`,
-            html:`<h1>Please welcome ${user.first_name} ${user.last_name}</h1>`
-        }
-transporter.sendMail(message2)
-
+   
         res.status(201).send(user)
 
       
@@ -53,28 +58,8 @@ transporter.sendMail(message2)
     }
 })
 
-// An endpoint to get the paginated users should be available
-
-router.get("/",async(req,res)=>{
-
-    try{
-        let page = +req.query.page||1
-        let size = +req.query.size||3
-        let skip = (page-1)*size
-    
-        const users = await User.find().skip(skip).limit(size).lean().exec()
-
-        const total = Math.ceil((await User.find().countDocuments())/size)
-    
-        return res.send({users,total})  
-    }
-    catch(e){
-        return res.status(500).json({ message: e.message, status: "Failed" });
-    }
 
 
-    
-})
 
 module.exports = router
 
